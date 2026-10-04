@@ -14,35 +14,126 @@ job summary that shows every category.
 > behavioural drift in ASI10 or real blast radius in ASI08) only show up at runtime. A clean scan is not an OWASP
 > compliance result. This project is independent and not affiliated with OWASP.
 
-## Quick start
+## Step-by-step: add the scanner to your agent project
 
-```yaml
-# .github/workflows/agentic-top10.yml
-name: Agentic Top 10 Scan
-on:
-  push:
-    branches: [main]
-  pull_request:
+Pick one route. Route A runs on every push with nothing to install. Route B runs on your own computer. Step C
+is optional and makes the scan more precise.
 
-permissions:
-  contents: read
+### A. On GitHub (recommended)
 
-jobs:
-  scan:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write   # only needed for the code-scanning upload
-    steps:
-      - uses: actions/checkout@v4
-      - uses: Adyanullah-Khan/agentic-top10-scan@v0.1.0   # pin to a commit SHA in production
-        with:
-          fail-on: high
-```
+1. **Open your agent's repository on GitHub** (the repo that holds your agent code, prompts or MCP config).
+2. **Create the workflow file.** Click **Add file → Create new file**. In the name box type
+   `.github/workflows/agentic-top10.yml`; typing the `/` characters creates the folders for you.
+3. **Paste this into the file:**
 
-Findings show up in three places: the **Security → Code scanning** tab (via the SARIF upload), inline
-annotations on the run, and the job summary. Code scanning on private repositories needs GitHub Advanced Security.
-If the upload fails, the step continues and the annotations and summary still work.
+   ```yaml
+   name: Agentic Top 10 Scan
+   on:
+     push:
+       branches: [main]
+     pull_request:
+     workflow_dispatch:        # adds a "Run workflow" button
+
+   permissions:
+     contents: read
+
+   jobs:
+     scan:
+       runs-on: ubuntu-latest
+       permissions:
+         contents: read
+         security-events: write   # lets results appear in the Security tab
+       steps:
+         - uses: actions/checkout@v4
+         - uses: Adyanullah-Khan/agentic-top10-scan@v0.1.0
+           with:
+             fail-on: none        # report only; change to "high" once you have cleared the backlog
+   ```
+
+   If your default branch is called `master` (or something else), change `main` on line 4.
+4. **Save it.** Click **Commit changes…**, leave *Commit directly to the main branch* selected, and click
+   **Commit changes**. This push starts the first scan.
+5. **Watch it run.** Open the **Actions** tab and click the **Agentic Top 10 Scan** run. It takes about a minute.
+   If it didn't start, select the workflow on the left and click **Run workflow**.
+6. **Read the results.** Findings appear in three places:
+   - **Run summary.** Scroll down on the run page for a table of all 10 OWASP categories, plus every finding with
+     its file and line.
+   - **Annotations.** Findings are marked inline on the run, and in the *Files changed* tab of pull requests.
+   - **Security → Code scanning.** The full list, with fix advice and a dismiss button. This tab is free on public
+     repositories; on private ones it needs GitHub Advanced Security. Without it, the upload step shows a warning and
+     the other two places still work.
+7. **Fix what it found.** Each finding says what's wrong and how to fix it, and
+   [docs/rules.md](docs/rules.md) explains every rule. To have the fixes written for you, add
+   [Agentic Top 10 Fix](https://github.com/Adyanullah-Khan/agentic-top10-fix), which opens a pull request.
+8. **Turn on the gate.** Once the important findings are fixed, change `fail-on: none` to `fail-on: high`. From then
+   on, any pull request that adds a high or critical finding fails its check.
+
+### B. On your computer
+
+1. **Check Python.** Run `python3 --version` in a terminal; you need 3.9 or newer.
+2. **Install the scanner:**
+
+   ```bash
+   pip install "git+https://github.com/Adyanullah-Khan/agentic-top10-scan@v0.1.0"
+   ```
+
+3. **Go to your agent project:** `cd path/to/your-agent`
+4. **Scan it:** `agentic-top10 .`
+   Findings are listed most severe first, followed by a table of all 10 OWASP categories.
+5. **Optional extras:**
+   - `agentic-top10 . --format sarif -o results.sarif` writes a report file.
+   - `agentic-top10 coverage` explains what each category check covers.
+   - `agentic-top10 . --include-tests` also scans test code, which is skipped by default.
+
+### C. Optional: describe your agent
+
+Some checks can only compare your code against what you *intend*. For example: should this tool need human
+approval? Should this memory be per-user? Telling the scanner that unlocks 7 more checks.
+
+1. **Create the file.** In your repository root, create `agent-manifest.yaml` (on GitHub: **Add file → Create new
+   file**).
+2. **List your agents.** For each one, give its name, the tools it can use, and its limits:
+
+   ```yaml
+   version: 1
+   agents:
+     - name: support-agent
+       tools: [search_kb, refund_order]
+       limits: { max_iterations: 15, max_runtime_seconds: 300 }
+   ```
+
+3. **List your tools.** For each one, say what it can do and who must approve it:
+
+   ```yaml
+   tools:
+     - name: refund_order
+       capabilities: [payments.refund]   # words like write, delete, send, pay, deploy mark a tool as high-risk
+       permissions: ["orders:refund"]    # exact scopes, never "*"
+       requires_approval: true           # high-risk tools need a human to say yes
+       endpoint: https://billing.internal.example/refund
+       auth: oauth2                      # oauth2 | mtls | api_key | none
+     - name: search_kb
+       capabilities: [docs.read]
+   ```
+
+4. **Describe memory and oversight**, if your agent remembers things between sessions:
+
+   ```yaml
+   memory:
+     - name: customer-memory
+       persistent: true
+       scope: per_user          # per_user | per_session | shared
+       write_validation: true
+       ttl_days: 30
+   oversight:
+     kill_switch: true
+     audit_log: true
+   ```
+
+5. **If agents talk to each other,** add `communication` under each agent, and `delegates_to` to list the agents it
+   may hand work to (see the full example in [Declaring your agent](#declaring-your-agent-optional-manifest)).
+6. **Commit the file.** The next scan checks it. Only declare what the running system really does; the manifest
+   describes your system, it doesn't change it.
 
 ## What it checks
 
