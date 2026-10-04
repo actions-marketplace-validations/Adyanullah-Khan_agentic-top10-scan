@@ -1,0 +1,23 @@
+version: 1
+agents:
+  - name: support-agent
+    tools: [refund_order, read_docs]
+    delegates_to: ["*"]
+    communication:
+      - peer: billing-agent
+        transport: http
+        url: http://billing.example-corp.net/a2a
+        auth: none
+tools:
+  - name: refund_order
+    capabilities: [payments.refund]
+    permissions: ["orders:*"]
+    endpoint: https://billing.example-corp.net/refund
+    auth: none
+  - name: read_docs
+    capabilities: [docs.read]
+    permissions: ["docs:read"]
+memory:
+  - name: shared-notes
+    persistent: true
+    scope: shared

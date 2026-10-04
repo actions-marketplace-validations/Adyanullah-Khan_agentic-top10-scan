@@ -1,0 +1,133 @@
+name: Agentic Top 10 Scan
+description: Static security checks for AI-agent projects across all ten OWASP Agentic Top 10 categories, with SARIF upload.
+author: Adyanullah Khan
+branding:
+  icon: shield
+  color: purple
+
+inputs:
+  path:
+    description: Directory or file to scan, relative to the repository root.
+    default: "."
+  fail-on:
+    description: Fail the step on findings at or above this severity (none, info, low, medium, high, critical).
+    default: high
+  min-severity:
+    description: Hide findings below this severity (info, low, medium, high, critical).
+    default: info
+  exclude:
+    description: Newline- or comma-separated globs to skip (in addition to .agentic-top10.yml).
+    default: ""
+  disable:
+    description: Newline- or comma-separated rule IDs to disable.
+    default: ""
+  config:
+    description: Path to a settings file. Defaults to .agentic-top10.yml when present.
+    default: ""
+  include-tests:
+    description: Also scan test code (tests/, test_*.py, *.test.ts, ...), which is skipped by default.
+    default: "false"
+  online:
+    description: Look up exactly pinned dependencies in OSV (sends package names and versions to api.osv.dev).
+    default: "false"
+  sarif-file:
+    description: Where to write the SARIF report.
+    default: agentic-top10.sarif
+  upload-sarif:
+    description: "Upload the SARIF report to GitHub code scanning (needs `security-events: write`)."
+    default: "true"
+  annotations:
+    description: Emit inline annotations on the workflow run (works without code scanning).
+    default: "true"
+  python-version:
+    description: Python version used to run the scanner.
+    default: "3.12"
+
+outputs:
+  sarif-file:
+    description: Path to the SARIF report.
+    value: ${{ steps.scan.outputs.sarif-file }}
+  finding-count:
+    description: Number of findings.
+    value: ${{ steps.scan.outputs.finding-count }}
+  exit-code:
+    description: Scanner exit code (0 = passed, 1 = findings at or above fail-on, 2 = scan error).
+    value: ${{ steps.scan.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Agentic Top 10 Scan
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        python -m venv "$RUNNER_TEMP/agentic-top10-venv"
+        "$RUNNER_TEMP/agentic-top10-venv/bin/python" -m pip install --quiet --disable-pip-version-check "$ACTION_PATH"
+
+    - name: Run scan
+      id: scan
+      shell: bash
+      env:
+        SCAN_PATH: ${{ inputs.path }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        MIN_SEVERITY: ${{ inputs.min-severity }}
+        EXCLUDE: ${{ inputs.exclude }}
+        DISABLE: ${{ inputs.disable }}
+        CONFIG: ${{ inputs.config }}
+        ONLINE: ${{ inputs.online }}
+        INCLUDE_TESTS: ${{ inputs.include-tests }}
+        SARIF_FILE: ${{ inputs.sarif-file }}
+        ANNOTATIONS: ${{ inputs.annotations }}
+      run: |
+        args=(scan "$SCAN_PATH" --sarif "$SARIF_FILE" --json "$RUNNER_TEMP/agentic-top10.json"
+              --markdown "$GITHUB_STEP_SUMMARY" --fail-on "$FAIL_ON" --min-severity "$MIN_SEVERITY" --quiet --no-color)
+        while IFS= read -r item; do
+          item="$(echo "$item" | xargs)"; [ -n "$item" ] && args+=(--exclude "$item")
+        done < <(printf '%s\n' "$EXCLUDE" | tr ',' '\n')
+        while IFS= read -r item; do
+          item="$(echo "$item" | xargs)"; [ -n "$item" ] && args+=(--disable "$item")
+        done < <(printf '%s\n' "$DISABLE" | tr ',' '\n')
+        if [ -n "$CONFIG" ]; then args+=(--config "$CONFIG"); fi
+        if [ "$ONLINE" = "true" ]; then args+=(--online); fi
+        if [ "$INCLUDE_TESTS" = "true" ]; then args+=(--include-tests); fi
+        if [ "$ANNOTATIONS" = "true" ]; then args+=(--github-annotations); fi
+        set +e
+        "$RUNNER_TEMP/agentic-top10-venv/bin/agentic-top10" "${args[@]}"
+        code=$?
+        set -e
+        count=0
+        if [ -f "$RUNNER_TEMP/agentic-top10.json" ]; then
+          count="$("$RUNNER_TEMP/agentic-top10-venv/bin/python" -c 'import json,sys; print(json.load(open(sys.argv[1]))["summary"]["total"])' "$RUNNER_TEMP/agentic-top10.json")"
+        fi
+        {
+          echo "exit-code=$code"
+          echo "sarif-file=$SARIF_FILE"
+          echo "finding-count=$count"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Upload SARIF to code scanning
+      if: inputs.upload-sarif == 'true' && steps.scan.outputs.exit-code != '2'
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+      with:
+        sarif_file: ${{ inputs.sarif-file }}
+        category: agentic-top10
+
+    - name: Enforce fail-on threshold
+      shell: bash
+      env:
+        EXIT_CODE: ${{ steps.scan.outputs.exit-code }}
+        FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        if [ "$EXIT_CODE" = "2" ]; then
+          echo "::error::Agentic Top 10 Scan could not complete (see the 'Run scan' step)."
+          exit 2
+        elif [ "$EXIT_CODE" != "0" ]; then
+          echo "::error::Agentic Top 10 Scan found issues at or above '$FAIL_ON' severity."
+          exit 1
+        fi

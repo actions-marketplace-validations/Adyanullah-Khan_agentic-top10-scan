@@ -1,0 +1,31 @@
+version: 1
+agents:
+  - name: research-agent
+    tools: [read_note, fetch_doc, send_email]
+    limits: {max_iterations: 15, max_runtime_seconds: 300, max_cost_usd: 2}
+    delegates_to: [billing-agent]
+    communication:
+      - peer: billing-agent
+        transport: https
+        url: https://billing.example-corp.net/a2a
+        auth: mtls
+        signed_messages: true
+tools:
+  - name: send_email
+    capabilities: [email.send]
+    permissions: ["mail:send"]
+    requires_approval: true
+    endpoint: https://mail.example-corp.net/send
+    auth: oauth2
+  - name: read_note
+    capabilities: [notes.read]
+    permissions: ["notes:read"]
+memory:
+  - name: user-notes
+    persistent: true
+    scope: per_user
+    write_validation: true
+    ttl_days: 30
+oversight:
+  kill_switch: true
+  audit_log: true

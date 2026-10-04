@@ -1,0 +1,5 @@
+services:
+  agent:
+    image: example/agent:1.0.0
+    user: "1000"
+    read_only: true

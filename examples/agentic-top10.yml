@@ -1,0 +1,24 @@
+# Copy to .github/workflows/agentic-top10.yml in your repository.
+name: Agentic Top 10 Scan
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1"   # weekly, catches newly published advisories when online: true
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Adyanullah-Khan/agentic-top10-scan@v0.1.0 # replace with the release commit SHA
+        with:
+          fail-on: high
+          online: "true"

@@ -1,0 +1,4 @@
+services:
+  agent:
+    image: example/agent:1.0.0
+    privileged: true

@@ -1,0 +1,14 @@
+name: Issue triage agent
+on:
+  issues:
+    types: [opened]
+permissions: write-all
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: some-org/setup-codex@v1
+      - name: Run agent
+        run: |
+          codex exec "Triage this issue: ${{ github.event.issue.title }} ${{ github.event.issue.body }}"

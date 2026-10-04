@@ -1,0 +1,5 @@
+# Settings used when this repository scans itself.
+exclude:
+  - tests/fixtures                            # deliberately vulnerable samples
+  - src/agentic_top10/analyzers/text_checks.py # contains the approval-bypass flags it detects
+  - src/agentic_top10/rules.py                # rule descriptions quote those flags

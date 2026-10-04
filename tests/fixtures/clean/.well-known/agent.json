@@ -1,0 +1,9 @@
+{
+  "name": "Research Agent",
+  "url": "https://research.example-corp.net/a2a",
+  "version": "1.0.0",
+  "capabilities": {"streaming": true},
+  "securitySchemes": {"oauth": {"type": "oauth2", "flows": {"clientCredentials": {"tokenUrl": "https://auth.example-corp.net/token", "scopes": {}}}}},
+  "security": [{"oauth": []}],
+  "skills": [{"id": "research", "name": "Research", "description": "Answers questions using internal documentation."}]
+}

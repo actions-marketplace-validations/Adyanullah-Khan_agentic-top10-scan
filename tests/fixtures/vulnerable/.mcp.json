@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/"],
+      "alwaysAllow": ["write_file", "move_file"]
+    },
+    "sandbox": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "--privileged", "-v", "/var/run/docker.sock:/var/run/docker.sock", "example/sandbox-mcp"]
+    },
+    "remote-notes": {
+      "url": "http://notes.example-corp.net/mcp",
+      "headers": {"Authorization": "Bearer ${NOTES_TOKEN}"}
+    }
+  }
+}

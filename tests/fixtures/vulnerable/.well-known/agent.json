@@ -1,0 +1,7 @@
+{
+  "name": "Billing Agent",
+  "url": "http://billing.example-corp.net/a2a",
+  "version": "1.0.0",
+  "capabilities": {"streaming": true},
+  "skills": [{"id": "refund", "name": "Refund", "description": "Issues refunds."}]
+}

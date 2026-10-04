@@ -1,0 +1,49 @@
+# CI for this repository: unit tests plus the action scanning its own fixtures.
+# Lives here rather than in .github/workflows/ only because it was pushed with a token without the `workflow` scope.
+# Move it to .github/workflows/ci.yml to enable it.
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.9", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e ".[test]" && pytest -q
+
+  action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Scan the vulnerable fixture (must fail)
+        id: vulnerable
+        uses: ./
+        continue-on-error: true
+        with:
+          path: tests/fixtures/vulnerable
+          upload-sarif: "false"
+          annotations: "false"
+      - name: Scan the clean fixture (must pass)
+        uses: ./
+        with:
+          path: tests/fixtures/clean
+          upload-sarif: "false"
+      - name: Check results
+        env:
+          VULN_EXIT: ${{ steps.vulnerable.outputs.exit-code }}
+          VULN_COUNT: ${{ steps.vulnerable.outputs.finding-count }}
+        run: |
+          test "$VULN_EXIT" = "1"
+          test "$VULN_COUNT" -gt 50
